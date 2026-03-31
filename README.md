@@ -87,9 +87,10 @@ When a check-in station loses connectivity:
 
 ### Live Dashboard
 
-- Stats and guest list poll every 5 seconds.
-- Rate calculation uses a SQL count over the last 60 seconds against an indexed column (`checkedInAt`).
-- No WebSocket overhead — polling is simple, debuggable, and sufficient for dashboard update frequency.
+- **Real-Time Insight Engine**: Dashboard queries fetch check-in counts dynamically split by the last 15-minute timeframe windows. This drives real-time, SVG-powered **interactive sparkline graphs**.
+- **Visual Feedback & Skeleton Loading**: Upon initial load and when actively retrieving polling updates, standard unified **tailwinds animate-pulse skeleton loaders** display natively. A spinning top-nav sync icon actively highlights the 5-second polling interval ticks.
+- Rate calculation uses an optimized historical timeframe check against indexed columns (`checkedInAt`).
+- No WebSocket overhead — polling is simple, scales incredibly well with this use case, and provides the visual real-time feel thanks to dynamic fetch indicators.
 
 ## API Endpoints
 

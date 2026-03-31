@@ -3,7 +3,7 @@ import prisma from "../lib/prisma";
 export async function getStats(eventId: string) {
   const [
     confirmedCount, waitlistedCount, cancelledCount, checkedInCount,
-    byTierRaw, byStationRaw, rateCount,
+    byTierRaw, byStationRaw, recentCheckinsRaw,
   ] = await Promise.all([
     prisma.guest.count({ where: { eventId, status: "CONFIRMED" } }),
     prisma.guest.count({ where: { eventId, status: "WAITLISTED" } }),
@@ -17,10 +17,23 @@ export async function getStats(eventId: string) {
       where: { eventId },
       include: { _count: { select: { checkins: true } } },
     }),
-    prisma.checkin.count({
-      where: { eventId, checkedInAt: { gte: new Date(Date.now() - 60 * 1000) } },
+    prisma.checkin.findMany({
+      where: { eventId, checkedInAt: { gte: new Date(Date.now() - 15 * 60 * 1000) } },
+      select: { checkedInAt: true },
     }),
   ]);
+
+  const now = Date.now();
+  const history = Array(15).fill(0);
+  let currentRate = 0;
+  recentCheckinsRaw.forEach((c) => {
+    const diffMs = now - c.checkedInAt.getTime();
+    if (diffMs <= 60 * 1000) currentRate++;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin >= 0 && diffMin < 15) {
+      history[14 - diffMin]++;
+    }
+  });
 
   const byTier = byTierRaw.map((tier) => ({
     tierName: tier.name, tierId: tier.id,
@@ -36,6 +49,6 @@ export async function getStats(eventId: string) {
 
   return {
     total: { confirmed: confirmedCount, checkedIn: checkedInCount, waitlisted: waitlistedCount, cancelled: cancelledCount },
-    byTier, byStation, rate: { current: rateCount },
+    byTier, byStation, rate: { current: currentRate, history },
   };
 }
