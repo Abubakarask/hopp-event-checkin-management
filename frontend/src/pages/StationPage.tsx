@@ -57,9 +57,20 @@ export default function StationPage() {
           scans: unsynced.map((s) => ({ qrToken: s.qrToken, clientTime: s.clientTime })),
         });
 
-        await markSynced(unsynced.map((s) => s.id));
-        await clearSyncedScans();
-        setPendingCount(0);
+        const successfulSyncIds = unsynced.filter((_, index) => {
+          const res = data.results[index];
+          // Keep in queue if backend catch block fired due to internal system failure
+          const isSystemError = !res.success && !res.conflict && res.guest?.id === "";
+          return !isSystemError;
+        }).map((s) => s.id);
+
+        if (successfulSyncIds.length > 0) {
+          await markSynced(successfulSyncIds);
+          await clearSyncedScans();
+        }
+        
+        const count = await getPendingCount();
+        setPendingCount(count);
         setSyncResults(data.results);
       } catch (err) {
         console.error("Batch sync failed, preserving offline queue for retry:", err);
