@@ -122,7 +122,15 @@ export async function processBatchCheckin(
 ): Promise<Array<CheckinResult & { qrToken: string }>> {
   const results: Array<CheckinResult & { qrToken: string }> = [];
 
+  const uniqueScansMap = new Map<string, { qrToken: string; clientTime?: string }>();
   for (const scan of scans) {
+    if (!uniqueScansMap.has(scan.qrToken)) {
+      uniqueScansMap.set(scan.qrToken, scan);
+    }
+  }
+  const uniqueScans = Array.from(uniqueScansMap.values());
+
+  for (const scan of uniqueScans) {
     try {
       const result = await processCheckin(
         scan.qrToken, stationId, eventId,

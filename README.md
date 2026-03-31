@@ -74,9 +74,10 @@ When a check-in station loses connectivity:
 1. Scans are queued in **IndexedDB** (persists across tab close/refresh) with client-side timestamps.
 2. A pending badge shows the offline queue count.
 3. When connectivity returns (detected via `navigator.onLine` + periodic health pings), the station auto-syncs via `POST /api/checkin/batch`.
-4. The batch endpoint processes each scan independently — a conflict on one scan doesn't roll back others.
-5. Each scan in the response has its own `success`/`conflict`/`error` status, shown in a sync summary modal.
-6. `clientTime` is stored alongside server `checkedInAt` for audit purposes. The server timestamp is authoritative.
+4. **Deduplication:** The batch endpoint natively filters out duplicate QR scans within the same localized offline payload before processing.
+5. **Atomicity & Retries:** Instead of wrapping the batch in a monolithic transaction (which would incorrectly roll back successful disjoint scans upon one normal conflict), the array processes sequentially. If the server or connection drops mid-batch, the frontend explicitly catches the resulting error and preserves the `IndexedDB` sync queue. It safely retries unacknowledged scans upon next connection without causing double counts (due to strict Database Idempotency protections).
+6. Each scan in the response has its own `success`/`conflict`/`error` status, shown in a sync summary modal.
+7. `clientTime` is stored alongside server `checkedInAt` for audit purposes. The server timestamp is authoritative.
 
 ### Concurrency Approach
 

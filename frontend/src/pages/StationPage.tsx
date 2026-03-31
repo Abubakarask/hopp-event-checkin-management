@@ -61,7 +61,9 @@ export default function StationPage() {
         await clearSyncedScans();
         setPendingCount(0);
         setSyncResults(data.results);
-      } catch {}
+      } catch (err) {
+        console.error("Batch sync failed, preserving offline queue for retry:", err);
+      }
     };
 
     sync();
