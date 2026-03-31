@@ -105,3 +105,21 @@ When a check-in station loses connectivity:
 | GET | /api/stats | Dashboard aggregates |
 | GET | /api/stats/event | Bootstrap event ID |
 | GET | /health | Health check |
+
+## Future Improvements
+
+### Async Message Queuing for High-Volume Batches (N+1 Optimization)
+To avoid the N+1 query problem during massive offline batch check-ins:
+- Implement a robust **Message Queue** (e.g., Redis Streams/BullMQ or RabbitMQ) to offload batch `processCheckin` loops completely asynchronously, grouping queries to effectively relieve connection pool pressure.
+- Provide a `GET /api/checkin/batch/:batchId/status` **batch-status API** allowing the frontend station device to poll for real-time progress and success indicators natively without holding hanging TCP connections.
+- Shift complex **retry logic** into the background worker thread, ensuring the system naturally absorbs temporary network dropouts without depending on the frontend.
+
+### Admin Dashboard API Segmentation
+The admin view dashboard currently depends on a single `GET /api/stats` endpoint. While fine for short scope, at massive scales querying all elements concurrently per request is inefficient:
+- Segment the admin view into independently chunkable endpoints (`/api/stats/arrivals`, `/api/stats/tiers`, etc).
+- Allow independent loading states for each component rather than tying everything into one monolithic query.
+
+### Role-Based Access Control (RBAC) Security
+For production security hardening and managing wide-scale events natively:
+- Transition from open endpoints to strict **Role-Based API Authorization**.
+- Generate granular access tokens distinguishing between **Hosts** (full analytics and guest management capabilities) and **Check-in Stations** (safely restricted to purely submitting `POST /api/checkin` scans).
