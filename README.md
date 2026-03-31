@@ -8,6 +8,7 @@ Event check-in system with concurrent multi-station scanning, offline queue reco
 
 - Node.js 18+
 - PostgreSQL running locally (or via Docker)
+- Redis running locally for distributed concurrency locks
 
 ### Setup
 
@@ -79,10 +80,10 @@ When a check-in station loses connectivity:
 
 ### Concurrency Approach
 
-- **Database transaction**: Each check-in is a single INSERT with a UNIQUE constraint. No SELECT-then-INSERT pattern.
-- **No application locks**: PostgreSQL's row-level locking during INSERT handles concurrent access.
-- **Isolation level**: Default (Read Committed) is sufficient — the UNIQUE constraint is checked at commit time regardless of isolation level.
-- **Conflict detection**: Prisma's `P2002` error code identifies unique violations. On conflict, a follow-up query fetches the winning check-in's station and timestamp for the error message.
+- **Application-Level Locks via Redis**: Before processing a scan, a distributed lock is acquired in Redis using `SET NX EX`. If two stations scan the same guest at the same millisecond, only one lock succeeds. The other station receives an immediate "being processed" response without hitting PostgreSQL, resolving subtle race condition paths.
+- **Database transaction**: Next, each check-in is a single INSERT with a UNIQUE constraint on `guestId`.
+- **Conflict detection**: If a duplicate somehow bypasses Redis or if we are verifying a sequential duplicate scan, Prisma's `P2002` error code or `guest.checkin` presence identifies it.
+- **Fail-Open Strategy**: If Redis is unavailable, the system safely falls back to PostgreSQL's DB constraints implicitly handling concurrency using row-level locking.
 
 ### Live Dashboard
 

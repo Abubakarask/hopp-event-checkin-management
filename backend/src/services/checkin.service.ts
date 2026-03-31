@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { NotFoundError, ConflictError, ValidationError } from "../lib/errors";
+import { acquireCheckinLock, getCheckinLockHolder, releaseCheckinLock } from "../lib/redis";
 
 interface CheckinResult {
   success: boolean;
@@ -59,15 +60,31 @@ export async function processCheckin(
     return { success: false, guest: guestInfo, error: "Attendee is waitlisted — promote to confirmed first" };
   }
 
-  if (guest.checkin) {
-    return {
-      success: false,
-      guest: guestInfo,
-      conflict: { stationName: guest.checkin.station.name, checkedInAt: guest.checkin.checkedInAt },
-    };
-  }
-
+  let lockAcquired = false;
   try {
+    lockAcquired = await acquireCheckinLock(guest.id, stationId);
+    if (!lockAcquired) {
+      const processingStationId = await getCheckinLockHolder(guest.id);
+      let stationName = "Another station";
+      if (processingStationId) {
+        const station = await prisma.station.findUnique({ where: { id: processingStationId } });
+        if (station) stationName = station.name;
+      }
+      return {
+        success: false,
+        guest: guestInfo,
+        conflict: { stationName, checkedInAt: new Date() },
+      };
+    }
+
+    if (guest.checkin) {
+      return {
+        success: false,
+        guest: guestInfo,
+        conflict: { stationName: guest.checkin.station.name, checkedInAt: guest.checkin.checkedInAt },
+      };
+    }
+
     const checkin = await prisma.checkin.create({
       data: { guestId: guest.id, eventId, stationId, clientTime: clientTime || null },
       include: { station: true },
@@ -91,6 +108,10 @@ export async function processCheckin(
       };
     }
     throw e;
+  } finally {
+    if (lockAcquired) {
+      await releaseCheckinLock(guest.id);
+    }
   }
 }
 
