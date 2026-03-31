@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GuestStatus {
+  CONFIRMED
+  WAITLISTED
+  CANCELLED
+}
+
+enum StationType {
+  GENERAL
+  VIP
+}
+
+model Event {
+  id           String  @id @default(uuid())
+  name         String  @db.VarChar(255)
+  description  String? @db.Text
+  maxAttendees Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ticketTiers TicketTier[]
+  guests      Guest[]
+  stations    Station[]
+  checkins    Checkin[]
+}
+
+model TicketTier {
+  id       String @id @default(uuid())
+  eventId  String
+  name     String @db.VarChar(100)
+  capacity Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guests Guest[]
+}
+
+model Station {
+  id      String      @id @default(uuid())
+  eventId String
+  name    String      @db.VarChar(100)
+  type    StationType @default(GENERAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  checkins Checkin[]
+}
+
+model Guest {
+  id      String      @id @default(uuid())
+  eventId String
+  tierId  String
+  name    String      @db.VarChar(255)
+  email   String      @db.VarChar(255)
+  phone   String?     @db.VarChar(20)
+  status  GuestStatus @default(CONFIRMED)
+  qrToken String      @unique @default(uuid())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tier    TicketTier @relation(fields: [tierId], references: [id])
+  checkin Checkin?
+
+  @@unique([eventId, email])
+  @@index([eventId])
+}
+
+model Checkin {
+  id          String    @id @default(uuid())
+  guestId     String    @unique
+  eventId     String
+  stationId   String
+  checkedInAt DateTime  @default(now())
+  clientTime  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guest   Guest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id])
+
+  @@unique([guestId, eventId])
+  @@index([eventId, checkedInAt])
+}
